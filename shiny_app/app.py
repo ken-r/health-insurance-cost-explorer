@@ -49,6 +49,7 @@ BAG_VERSICHERER = {
 
 MAX_AMOUNT_YOU_PAY_AFTER_DEDUCTIBLE = 700
 DECIMAL_AFTER_DEDUCTIBLE = 0.10 # We need to pay 10% of costs after deductible
+DATA_RETRIEVED_ON = "2025-12-01"
 
 DEDUCTIBLE_CHILD_LVL_TO_AMOUNT = {"FRAST1": 0, "FRAST2": 100, "FRAST3": 200, "FRAST4": 300, "FRAST5": 400, "FRAST6": 500, "FRAST7": 600}
 DEDUCTIBLE_ADULT_LVL_TO_AMOUNT = {"FRAST1": 300, "FRAST2": 500, "FRAST3": 1000, "FRAST4": 1500, "FRAST5": 2000, "FRAST6": 2500}
@@ -73,38 +74,69 @@ def calculate_annual_cost_insurance(treatment_costs_during_year, premium_per_mon
     return total_costs_you_pay
 
 
-# Load data once when app starts (outside server function)
-try:
-    premiums_df = pd.read_csv("https://opendata.bagnet.ch/?r=/download&path=L1ByYWVtaWVuL1Byw6RtaWVuX0NILmNzdg%3D%3D")
-    premiums_df['Versicherung'] = premiums_df['Versicherer'].map(BAG_VERSICHERER)
+def load_app_data():
+    """Load the datasets required by the application."""
+    try:
+        premiums = pd.read_csv("data/premiums.csv")
+        premiums['Versicherung'] = premiums['Versicherer'].map(BAG_VERSICHERER)
 
+        premium_regions = pd.read_excel("data/premium_regions.xlsx", sheet_name='A_COM', skiprows=4,engine="openpyxl")
 
-    premium_regions_df = pd.read_excel("https://www.priminfo.admin.ch/downloads/praemienregionen.xlsx", sheet_name='A_COM', skiprows=4,engine="openpyxl")
+        insurance_model_restrictions = pd.read_csv("data/insurance_model_restrictions.csv", sep=";")
 
-    insurance_model_restrictions_df = pd.read_csv("https://opendata.bagnet.ch/?r=/download&path=L1ByYWVtaWVuL0Vpbnp1Z3NnZWJpZXRlLmNzdg%3D%3D", sep=";")
+        # We only need the rows where there is a restriction
+        insurance_model_restrictions = insurance_model_restrictions[insurance_model_restrictions["Eingeschränkt"] == "Y"]
+        # Convert the "Gemeinden-BFS" column from comma-separated strings to lists of integers
+        insurance_model_restrictions["Gemeinden-BFS"] = insurance_model_restrictions["Gemeinden-BFS"].apply(lambda x: [int(i) for i in x.split(",")] if pd.notna(x) else x)
+        # The original excel file has column names on two lines: First Line = German name, Second Line = French translation
+        premium_regions.columns = [col.splitlines()[0] for col in premium_regions.columns]
+        print("Loaded data successfully.")
 
-    # We only need the rows where there is a restriction
-    insurance_model_restrictions_df = insurance_model_restrictions_df[insurance_model_restrictions_df["Eingeschränkt"] == "Y"]
-    # Convert the "Gemeinden-BFS" column from comma-separated strings to lists of integers
-    insurance_model_restrictions_df["Gemeinden-BFS"] = insurance_model_restrictions_df["Gemeinden-BFS"].apply(lambda x: [int(i) for i in x.split(",")] if pd.notna(x) else x)
-    # The original excel file has column names on two lines: First Line = German name, Second Line = French translation
-    premium_regions_df.columns = [col.splitlines()[0] for col in premium_regions_df.columns]
-    print("Loaded data successfully.")
+    except Exception as e:
+        raise RuntimeError(
+                "Could not load the required application data."
+            ) from e
 
-except Exception as e:
-    print(f"Error loading data: {e}")
+    if premiums.empty or premium_regions.empty or insurance_model_restrictions.empty:
+        raise RuntimeError("One or more application datasets are empty.")
 
+    return premiums, premium_regions, insurance_model_restrictions
+
+premiums, premium_regions, insurance_model_restrictions = load_app_data()
 
 # Calculate count of each PLZ and append as a new column
-premium_regions_df['plz_count'] = premium_regions_df.groupby('PLZ')['PLZ'].transform('count')
+premium_regions['plz_count'] = premium_regions.groupby('PLZ')['PLZ'].transform('count')
 
 municipality_choices = {'': ''} | {f"{row['BFS-Nr.']}|{row['Kanton']}|{row['Region']}|{row['PLZ']}|{row['Ort']}|{row['Gemeinde']}": f"{row['PLZ']} {row['Ort']}" + (f" (Gemeinde {row['Gemeinde']})" if row['plz_count'] > 1 else "")
-                for _, row in premium_regions_df.iterrows()}
+                for _, row in premium_regions.iterrows()}
 
 app_ui = ui.page_fixed(
-        ui.panel_title(ui.h2("Swiss Health Insurance Premium Calculator for 2026", class_="pt-4 pb-3")), # Add some padding to top and bottom of title
-        ui.output_ui("dynamic_page"),
+    ui.panel_title(
+        ui.h2(
+            "Swiss Health Insurance Premium Calculator for 2026",
+            class_="pt-4 pb-3",
         )
+    ),
+    ui.output_ui("dynamic_page"),
+    ui.tags.footer(
+        ui.hr(),
+        ui.p(
+            "Data: ",
+            ui.a(
+                "Federal Office of Public Health (FOPH/BAG)",
+                href="https://opendata.swiss/en/dataset/health-insurance-premiums",
+                target="_blank",
+                rel="noopener noreferrer",
+            ),
+            f" | Retrieved {DATA_RETRIEVED_ON}",
+        ),
+        ui.p(
+            "Unofficial comparison tool. Verify premiums and availability "
+            "with the insurer before making a decision."
+        ),
+        class_="text-muted small pb-4",
+    ),
+)
         
 def server(input, output, session):
     page_state = reactive.Value('input_insurance_calculation')
@@ -313,15 +345,16 @@ def server(input, output, session):
         req(len(get_input_errors()) == 0) # Only run the calculation once there are no input errors.
         df = pd.DataFrame()
         bfs_nr, canton, region, *_, = input.location().split('|')
+        bfs_nr = int(bfs_nr)
 
-        df = premiums_df[(premiums_df['Kanton'] == canton) & 
-                           (premiums_df['Region'] == f"PR-REG CH{region}") & 
-                           (premiums_df['Altersklasse'] == age_category()) &
-                           (premiums_df['Franchisestufe'] == input.deductible()) &
-                           (premiums_df['Unfalleinschluss'] == input.accident_insurance())].sort_values(by='Prämie')
+        df = premiums[(premiums['Kanton'] == canton) & 
+                           (premiums['Region'] == f"PR-REG CH{region}") & 
+                           (premiums['Altersklasse'] == age_category()) &
+                           (premiums['Franchisestufe'] == input.deductible()) &
+                           (premiums['Unfalleinschluss'] == input.accident_insurance())].sort_values(by='Prämie')
         
         join_keys = ['Kanton', 'Region', 'Versicherer', 'Tarif', 'Tariftyp']
-        merged = pd.merge(df, insurance_model_restrictions_df[join_keys + ['Gemeinden-BFS']], on=join_keys, how='left')
+        merged = pd.merge(df, insurance_model_restrictions[join_keys + ['Gemeinden-BFS']], on=join_keys, how='left')
         
         # Filter out rows where there is a restriction for the selected municipality (BFS-Nr.)
         filtered = merged[(merged['Gemeinden-BFS'].isna()) | (merged['Gemeinden-BFS'].apply(lambda x: bfs_nr in x if isinstance(x, list) else False))]  
@@ -349,13 +382,13 @@ def server(input, output, session):
         row = df.iloc[selected[0]]
         insurance_provider, insurance_plan = row['Versicherung'], row['Tarifbezeichnung']
 
-        deductible_levels_to_compare = premiums_df[
-            (premiums_df['Versicherung'] == insurance_provider) &
-            (premiums_df['Tarifbezeichnung'] == insurance_plan) &
-            (premiums_df['Unfalleinschluss'] == row['Unfalleinschluss']) &
-            (premiums_df['Kanton'] == row['Kanton']) &
-            (premiums_df['Region'] == row['Region']) &
-            (premiums_df['Altersklasse'] == row['Altersklasse'])
+        deductible_levels_to_compare = premiums[
+            (premiums['Versicherung'] == insurance_provider) &
+            (premiums['Tarifbezeichnung'] == insurance_plan) &
+            (premiums['Unfalleinschluss'] == row['Unfalleinschluss']) &
+            (premiums['Kanton'] == row['Kanton']) &
+            (premiums['Region'] == row['Region']) &
+            (premiums['Altersklasse'] == row['Altersklasse'])
         ]
 
         # Create treatment costs range (0 to 10,000 CHF)
@@ -395,13 +428,13 @@ def server(input, output, session):
         row = df.iloc[selected[0]]
         insurance_provider, insurance_plan = row['Versicherung'], row['Tarifbezeichnung']
 
-        deductible_levels_to_compare = premiums_df[
-            (premiums_df['Versicherung'] == insurance_provider) &
-            (premiums_df['Tarifbezeichnung'] == insurance_plan) &
-            (premiums_df['Unfalleinschluss'] == row['Unfalleinschluss']) &
-            (premiums_df['Kanton'] == row['Kanton']) &
-            (premiums_df['Region'] == row['Region']) &
-            (premiums_df['Altersklasse'] == row['Altersklasse'])
+        deductible_levels_to_compare = premiums[
+            (premiums['Versicherung'] == insurance_provider) &
+            (premiums['Tarifbezeichnung'] == insurance_plan) &
+            (premiums['Unfalleinschluss'] == row['Unfalleinschluss']) &
+            (premiums['Kanton'] == row['Kanton']) &
+            (premiums['Region'] == row['Region']) &
+            (premiums['Altersklasse'] == row['Altersklasse'])
         ]
 
         result_df = pd.DataFrame({"Treatment Costs during the year": [f"{treatment_cost} CHF" for treatment_cost in treatment_costs]})
