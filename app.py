@@ -49,10 +49,10 @@ BAG_VERSICHERER = {
 
 MAX_AMOUNT_YOU_PAY_AFTER_DEDUCTIBLE = 700
 DECIMAL_AFTER_DEDUCTIBLE = 0.10 # We need to pay 10% of costs after deductible
-DATA_RETRIEVED_ON = "2025-12-01"
+DATA_RETRIEVED_ON = "2025-10-24"
 
-DEDUCTIBLE_CHILD_LVL_TO_AMOUNT = {"FRAST1": 0, "FRAST2": 100, "FRAST3": 200, "FRAST4": 300, "FRAST5": 400, "FRAST6": 500, "FRAST7": 600}
-DEDUCTIBLE_ADULT_LVL_TO_AMOUNT = {"FRAST1": 300, "FRAST2": 500, "FRAST3": 1000, "FRAST4": 1500, "FRAST5": 2000, "FRAST6": 2500}
+DEDUCTIBLE_CHILD_LVL_TO_AMOUNT = {"FRASTU_01": 0, "FRASTU_02": 100, "FRASTU_03": 200, "FRASTU_04": 300, "FRASTU_05": 400, "FRASTU_06": 500, "FRASTU_07": 600}
+DEDUCTIBLE_ADULT_LVL_TO_AMOUNT = {"FRASTU_01": 300, "FRASTU_02": 500, "FRASTU_03": 1000, "FRASTU_04": 1500, "FRASTU_05": 2000, "FRASTU_06": 2500}
 
 def calculate_annual_cost_health_insurance(treatment_costs_during_year, premium_per_month, deductible_amount):
         amount_after_deductible = max(0, treatment_costs_during_year - deductible_amount)
@@ -77,12 +77,12 @@ def calculate_annual_cost_insurance(treatment_costs_during_year, premium_per_mon
 def load_app_data():
     """Load the datasets required by the application."""
     try:
-        premiums = pd.read_csv("data/premiums.csv")
+        premiums = pd.read_csv("data/premiums.csv", sep=",")
         premiums['Versicherung'] = premiums['Versicherer'].map(BAG_VERSICHERER)
 
         premium_regions = pd.read_excel("data/premium_regions.xlsx", sheet_name='A_COM', skiprows=4,engine="openpyxl")
 
-        insurance_model_restrictions = pd.read_csv("data/insurance_model_restrictions.csv", sep=";")
+        insurance_model_restrictions = pd.read_csv("data/insurance_model_restrictions.csv", sep=",")
 
         # We only need the rows where there is a restriction
         insurance_model_restrictions = insurance_model_restrictions[insurance_model_restrictions["Eingeschränkt"] == "Y"]
@@ -91,6 +91,9 @@ def load_app_data():
         # The original excel file has column names on two lines: First Line = German name, Second Line = French translation
         premium_regions.columns = [col.splitlines()[0] for col in premium_regions.columns]
         print("Loaded data successfully.")
+        print(premiums.head())
+        print(premium_regions.head())
+        print(insurance_model_restrictions.head())
 
     except Exception as e:
         raise RuntimeError(
@@ -159,14 +162,14 @@ def server(input, output, session):
             previous_inputs = personal_details.get()
             selectize_updated.set(False)
             return ui.card(
-                ui.p("Please enter your personal details to calculate health insurance offers for 2026."),
-                ui.input_numeric("birth_year", "Year of birth", value=previous_inputs.get('birth_year'), min=1900, max=2025, step=1),
+                ui.p("Please enter your personal details to calculate health insurance offers for 2027."),
+                ui.input_numeric("birth_year", "Year of birth", value=previous_inputs.get('birth_year'), min=1900, max=2026, step=1),
                 ui.output_ui("municipality_select"),
                 ui.output_ui("deductible_select"),
                 ui.input_radio_buttons(
                     "accident_insurance",
                     "Include accident insurance?",
-                    choices={"MIT-UNF": "Yes", "OHN-UNF": "No"},
+                    choices={"MIT_UNF": "Yes", "OHN_UNF": "No"},
                     selected=previous_inputs.get('accident_insurance')
                 ),
                 ui.input_action_button("calculate_offers", "Calculate Insurance Offers"),
@@ -201,7 +204,7 @@ def server(input, output, session):
     def get_input_errors():
         errors = []
         if not age_validation():
-            errors.append("Please enter a valid birth year between 1900 and 2025 and then choose a deductible level.")
+            errors.append("Please enter a valid birth year between 1900 and 2026 and then choose a deductible level.")
         if not input.location():
             errors.append("Please select a municipality.")
         if not input.accident_insurance():
@@ -247,16 +250,16 @@ def server(input, output, session):
 
     @reactive.calc
     def is_child():
-        return personal_details.get()['birth_year'] >= 2008
+        return personal_details.get()['birth_year'] >= 2009
 
     @reactive.calc
     def age_category():
         if is_child():
-            return 'AKL-KIN'
-        elif input.birth_year() >= 2001:
-            return 'AKL-JUG'
+            return 'AKA_01_KIN'
+        elif input.birth_year() >= 2002:
+            return 'AKA_02_JUG'
         else:
-            return 'AKL-ERW'
+            return 'AKA_03_ERW'
         
     @reactive.calc
     def deductible_display():
@@ -268,7 +271,7 @@ def server(input, output, session):
         return DEDUCTIBLE_CHILD_LVL_TO_AMOUNT[deductible_lvl] if is_child() else DEDUCTIBLE_ADULT_LVL_TO_AMOUNT[deductible_lvl]
     
     def deductible_amount_for_person(deductible_level, age_class):
-        return DEDUCTIBLE_CHILD_LVL_TO_AMOUNT[deductible_level] if age_class == 'AKL-KIN' else DEDUCTIBLE_ADULT_LVL_TO_AMOUNT[deductible_level]
+        return DEDUCTIBLE_CHILD_LVL_TO_AMOUNT[deductible_level] if age_class == 'AKA_01_KIN' else DEDUCTIBLE_ADULT_LVL_TO_AMOUNT[deductible_level]
 
     @reactive.calc
     def location_display():
@@ -277,7 +280,7 @@ def server(input, output, session):
     
     @reactive.calc
     def accident_display():
-        return "Yes" if personal_details.get()['accident_insurance'] == "MIT-UNF" else "No"
+        return "Yes" if personal_details.get()['accident_insurance'] == "MIT_UNF" else "No"
 
     @render.ui
     def municipality_select():
@@ -310,7 +313,7 @@ def server(input, output, session):
     @reactive.calc
     def age_validation():
         birth_year = input.birth_year()
-        return birth_year is not None and isinstance(birth_year, int) and 1900 <= birth_year <= 2025
+        return birth_year is not None and isinstance(birth_year, int) and 1900 <= birth_year <= 2026
 
     @render.ui
     def deductible_select():
@@ -327,7 +330,7 @@ def server(input, output, session):
                 ),
                 class_="form-group shiny-input-container"
                 ) 
-        deductible_options = DEDUCTIBLE_ADULT_LVL_TO_AMOUNT if birth_year < 2008 else DEDUCTIBLE_CHILD_LVL_TO_AMOUNT
+        deductible_options = DEDUCTIBLE_ADULT_LVL_TO_AMOUNT if birth_year < 2009 else DEDUCTIBLE_CHILD_LVL_TO_AMOUNT
         
         previous_inputs = personal_details.get()
         previous_deductible = previous_inputs.get('deductible') if previous_inputs else None
@@ -348,7 +351,7 @@ def server(input, output, session):
         bfs_nr = int(bfs_nr)
 
         df = premiums[(premiums['Kanton'] == canton) & 
-                           (premiums['Region'] == f"PR-REG CH{region}") & 
+                           (premiums['Region'] == f"PR_REG_{region}") & 
                            (premiums['Altersklasse'] == age_category()) &
                            (premiums['Franchisestufe'] == input.deductible()) &
                            (premiums['Unfalleinschluss'] == input.accident_insurance())].sort_values(by='Prämie')
