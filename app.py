@@ -50,6 +50,20 @@ BAG_VERSICHERER = {
 MAX_AMOUNT_YOU_PAY_AFTER_DEDUCTIBLE = 700
 DECIMAL_AFTER_DEDUCTIBLE = 0.10 # We need to pay 10% of costs after deductible
 DATA_RETRIEVED_ON = "2026-10-24"
+INSURANCE_YEAR = 2027
+
+# Allow ages up to 125 during the insurance year.
+LOWEST_BIRTH_YEAR = INSURANCE_YEAR - 125
+
+# Exclude babies born during the insurance year, as their premiums
+# are only payable from their date of birth.
+HIGHEST_BIRTH_YEAR = INSURANCE_YEAR - 1
+
+# Children must be born in this year or later to qualify as children.
+LOWEST_CHILD_BIRTH_YEAR = INSURANCE_YEAR - 18
+
+# Non-children must be born in this year or later to qualify as young adults.
+LOWEST_YOUNG_ADULT_BIRTH_YEAR = INSURANCE_YEAR - 25
 
 DEDUCTIBLE_CHILD_LVL_TO_AMOUNT = {"FRASTU_01": 0, "FRASTU_02": 100, "FRASTU_03": 200, "FRASTU_04": 300, "FRASTU_05": 400, "FRASTU_06": 500, "FRASTU_07": 600}
 DEDUCTIBLE_ADULT_LVL_TO_AMOUNT = {"FRASTU_01": 300, "FRASTU_02": 500, "FRASTU_03": 1000, "FRASTU_04": 1500, "FRASTU_05": 2000, "FRASTU_06": 2500}
@@ -116,7 +130,7 @@ municipality_choices = {'': ''} | {f"{row['BFS-Nr.']}|{row['Kanton']}|{row['Regi
 app_ui = ui.page_fixed(
     ui.panel_title(
         ui.h2(
-            "Swiss Health Insurance Premium Calculator for 2027",
+            f"Swiss Health Insurance Premium Calculator for {INSURANCE_YEAR}",
             class_="pt-4 pb-3",
         )
     ),
@@ -162,8 +176,8 @@ def server(input, output, session):
             previous_inputs = personal_details.get()
             selectize_updated.set(False)
             return ui.card(
-                ui.p("Please enter your personal details to calculate health insurance offers for 2027."),
-                ui.input_numeric("birth_year", "Year of birth", value=previous_inputs.get('birth_year'), min=1900, max=2026, step=1),
+                ui.p(f"Please enter your personal details to calculate health insurance offers for {INSURANCE_YEAR}."),
+                ui.input_numeric("birth_year", "Year of birth", value=previous_inputs.get('birth_year'), min=LOWEST_BIRTH_YEAR, max=HIGHEST_BIRTH_YEAR, step=1),
                 ui.output_ui("municipality_select"),
                 ui.output_ui("deductible_select"),
                 ui.input_radio_buttons(
@@ -204,7 +218,7 @@ def server(input, output, session):
     def get_input_errors():
         errors = []
         if not age_validation():
-            errors.append("Please enter a valid birth year between 1900 and 2026 and then choose a deductible level.")
+            errors.append(f"Please enter a valid birth year between {LOWEST_BIRTH_YEAR} and {HIGHEST_BIRTH_YEAR} and then choose a deductible level.")
         if not input.location():
             errors.append("Please select a municipality.")
         if not input.accident_insurance():
@@ -250,13 +264,13 @@ def server(input, output, session):
 
     @reactive.calc
     def is_child():
-        return personal_details.get()['birth_year'] >= 2009
+        return personal_details.get()['birth_year'] >= LOWEST_CHILD_BIRTH_YEAR
 
     @reactive.calc
     def age_category():
         if is_child():
             return 'AKA_01_KIN'
-        elif input.birth_year() >= 2002:
+        elif input.birth_year() >= LOWEST_YOUNG_ADULT_BIRTH_YEAR:
             return 'AKA_02_JUG'
         else:
             return 'AKA_03_ERW'
@@ -313,7 +327,7 @@ def server(input, output, session):
     @reactive.calc
     def age_validation():
         birth_year = input.birth_year()
-        return birth_year is not None and isinstance(birth_year, int) and 1900 <= birth_year <= 2026
+        return birth_year is not None and isinstance(birth_year, int) and LOWEST_BIRTH_YEAR <= birth_year <= HIGHEST_BIRTH_YEAR
 
     @render.ui
     def deductible_select():
@@ -330,7 +344,7 @@ def server(input, output, session):
                 ),
                 class_="form-group shiny-input-container"
                 ) 
-        deductible_options = DEDUCTIBLE_ADULT_LVL_TO_AMOUNT if birth_year < 2009 else DEDUCTIBLE_CHILD_LVL_TO_AMOUNT
+        deductible_options = DEDUCTIBLE_CHILD_LVL_TO_AMOUNT if birth_year >= LOWEST_CHILD_BIRTH_YEAR else DEDUCTIBLE_ADULT_LVL_TO_AMOUNT
         
         previous_inputs = personal_details.get()
         previous_deductible = previous_inputs.get('deductible') if previous_inputs else None
