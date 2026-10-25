@@ -49,7 +49,7 @@ BAG_VERSICHERER = {
 
 MAX_AMOUNT_YOU_PAY_AFTER_DEDUCTIBLE = 700
 DECIMAL_AFTER_DEDUCTIBLE = 0.10 # We need to pay 10% of costs after deductible
-DATA_RETRIEVED_ON = "2025-10-24"
+DATA_RETRIEVED_ON = "2026-10-24"
 
 DEDUCTIBLE_CHILD_LVL_TO_AMOUNT = {"FRASTU_01": 0, "FRASTU_02": 100, "FRASTU_03": 200, "FRASTU_04": 300, "FRASTU_05": 400, "FRASTU_06": 500, "FRASTU_07": 600}
 DEDUCTIBLE_ADULT_LVL_TO_AMOUNT = {"FRASTU_01": 300, "FRASTU_02": 500, "FRASTU_03": 1000, "FRASTU_04": 1500, "FRASTU_05": 2000, "FRASTU_06": 2500}
@@ -116,7 +116,7 @@ municipality_choices = {'': ''} | {f"{row['BFS-Nr.']}|{row['Kanton']}|{row['Regi
 app_ui = ui.page_fixed(
     ui.panel_title(
         ui.h2(
-            "Swiss Health Insurance Premium Calculator for 2026",
+            "Swiss Health Insurance Premium Calculator for 2027",
             class_="pt-4 pb-3",
         )
     ),
