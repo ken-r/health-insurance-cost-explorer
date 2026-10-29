@@ -3,49 +3,6 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-# Mapping the codes from the dataset to their actual names.
-# I only found a pdf file with this information, so I manually created this dictionary.
-# Source: https://www.bag.admin.ch/dam/de/sd-web/tGi8dHtom8eb/Zugelassene%20Krankenversicherer_1.10.2025.pdf
-# TODO: There is actually an xlsx file with this information: https://www.bag.admin.ch/dam/de/sd-web/Gjlbd6ULgWmm/Zugelassene%20Krankenversicherer_1.10.2025.xlsx
-BAG_VERSICHERER = {
-    1560: "Agrisano",
-    1507: "AMB Assurances SA",
-    32:   "Aquilana",
-    1542: "Assura",
-    312:  "Atupri",
-    343:  "Avenir",
-    1322: "Birchmeier",
-    290:  "CONCORDIA",
-    8:    "CSS",
-    881:  "EGK",
-    134:  "Einsiedler",
-    1386: "GALENOS AG",
-    780:  "Glarner",
-    1562: "Helsana",
-    829:  "KLuG",
-    376:  "KPT",
-    820:  "Lumneziana",
-    360:  "KKLH",
-    1479: "Mutuel",
-    455:  "ÖKK",
-    1535: "Philos",
-    1401: "rhenusana",
-    1568: "sana24",
-    901: "sanavals",
-    1509: "Sanitas",
-    923: "SLKK",
-    941: "sodalis",
-    246: "Steffisburg",
-    194: "Sumiswalder",
-    1384: "SWICA",
-    1113: "Vallée d’Entremont",
-    1555: "Visana",
-    1040: "Visperterminen",
-    966: "vita surselva",
-    1570: "Vivacare",
-    509: "Vivao Sympany",
-    1318: "Wädenswil",
-}
 
 MAX_AMOUNT_YOU_PAY_AFTER_DEDUCTIBLE = 700
 DECIMAL_AFTER_DEDUCTIBLE = 0.10 # We need to pay 10% of costs after deductible
@@ -87,11 +44,28 @@ def calculate_annual_cost_insurance(treatment_costs_during_year, premium_per_mon
     total_costs_you_pay = premium_per_year + (treatment_costs_during_year - insurance_pays)
     return total_costs_you_pay
 
+def load_bag_versicherer():
+    """Create the insurer number to name mappings with the xlsx-file."""
+
+    df = pd.read_excel(
+        "data/insurance_providers.xlsx",
+        sheet_name="Index ", # The downloaded file has a trailing empty space!
+        header=2,
+        usecols=["Nummer", "Name"],
+        engine="openpyxl"
+    ).dropna()
+
+    providers = dict(zip(df["Nummer"].astype(int), df["Name"].str.strip()))
+    return providers
 
 def load_app_data():
     """Load the datasets required by the application."""
     try:
         premiums = pd.read_csv("data/premiums.csv", sep=",")
+        BAG_VERSICHERER = load_bag_versicherer()
+        missing_codes = set(premiums['Versicherer']) - BAG_VERSICHERER.keys()
+        if missing_codes:
+            raise ValueError(f"Insurer names missing for codes: {sorted(missing_codes)}")
         premiums['Versicherung'] = premiums['Versicherer'].map(BAG_VERSICHERER)
 
         premium_regions = pd.read_excel("data/premium_regions.xlsx", sheet_name='A_COM', skiprows=4,engine="openpyxl")
