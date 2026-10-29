@@ -104,7 +104,7 @@ municipality_choices = {'': ''} | {f"{row['BFS-Nr.']}|{row['Kanton']}|{row['Regi
 app_ui = ui.page_fixed(
     ui.panel_title(
         ui.h2(
-            f"Swiss Health Insurance Premium Calculator for {INSURANCE_YEAR}",
+            f"Swiss Health Insurance Cost Explorer for {INSURANCE_YEAR}",
             class_="pt-4 pb-3",
         )
     ),

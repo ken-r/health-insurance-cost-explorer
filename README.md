@@ -1,4 +1,4 @@
-# Health Insurance Visualizer
+# Health Insurance Cost Explorer
 Health insurance premiums make up a significant portion of many people’s expenses. Every year, these premiums are adjusted, and switching insurance providers or plans can lead to considerable savings.
 However, comparing premiums across different providers together with varying deductible (franchise) levels is often complex and confusing.
 

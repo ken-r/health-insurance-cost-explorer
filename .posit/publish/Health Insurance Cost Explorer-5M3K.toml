@@ -4,15 +4,16 @@
 "$schema" = "https://cdn.posit.co/publisher/schemas/posit-publishing-schema-v3.json"
 type = "python-shiny"
 entrypoint = "app.py"
-title = "Swiss Health Insurance Premium Calculator"
+title = "Health Insurance Cost Explorer"
 files = [
     "/app.py",
     "/requirements.txt",
-    "/.posit/publish/Swiss Health Insurance Premium-5M3K.toml",
+    "/.posit/publish/Health Insurance Cost Explorer-5M3K.toml",
     "/.posit/publish/deployments/deployment-HQTL.toml",
     "/data/premiums.csv",
     "/data/premium_regions.xlsx",
     "/data/insurance_model_restrictions.csv",
+    "/data/insurance_providers.xlsx",
 ]
 validate = true
 product_type = "connect_cloud"
